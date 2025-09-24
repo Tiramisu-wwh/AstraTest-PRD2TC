@@ -24,6 +24,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '../contexts/SessionContext';
 import { useUploadFile, useAnalyzeDocument } from '../hooks/useApi';
+import { api } from '../lib/api';
 import type { UploadProps } from 'antd';
 
 const { Title, Text, Paragraph } = Typography;
@@ -43,7 +44,7 @@ const FILE_CONFIG = {
 };
 
 const HomePage: React.FC = () => {
-  const { currentSession, isLoading: sessionLoading } = useSession();
+  const { currentSession, isLoading: sessionLoading, setCurrentSession, setSessions } = useSession();
   const navigate = useNavigate();
   const [uploadedFile, setUploadedFile] = useState<any>(null);
   const [extractedContent, setExtractedContent] = useState<string>('');
@@ -128,6 +129,20 @@ const HomePage: React.FC = () => {
         uploaded: true,
         fileId: result.id,
       }));
+
+      // 刷新会话列表和当前会话（因为后端可能更新了会话标题）
+      try {
+        const updatedSessions = await api.getSessions();
+        setSessions(updatedSessions);
+
+        // 更新当前会话信息
+        const updatedCurrentSession = updatedSessions.find(s => s.id === currentSession?.id);
+        if (updatedCurrentSession) {
+          setCurrentSession(updatedCurrentSession);
+        }
+      } catch (refreshError) {
+        console.warn('刷新会话列表失败:', refreshError);
+      }
 
       message.success('文件上传成功！');
     } catch (error) {

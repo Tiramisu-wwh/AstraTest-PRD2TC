@@ -27,6 +27,7 @@ class TestCaseBase(BaseModel):
     expected_result: Optional[str] = None
     case_level: Optional[str] = "中"
     case_type: Optional[str] = "功能测试"
+    ai_order: Optional[int] = None
 
 class TestCaseCreate(TestCaseBase):
     session_id: str
@@ -44,6 +45,7 @@ class TestCaseUpdate(BaseModel):
 class TestCaseResponse(TestCaseBase):
     id: str
     session_id: str
+    ai_order: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -54,16 +56,26 @@ class TestCaseResponse(TestCaseBase):
 class ChatSessionCreate(BaseModel):
     title: str
     user_id: Optional[str] = None
+    file_id: Optional[str] = None
+    file_name: Optional[str] = None
 
 class ChatSessionResponse(BaseModel):
     id: str
     user_id: str
     title: str
+    file_id: Optional[str] = None
+    file_name: Optional[str] = None
+    is_deleted: bool = False
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+class ChatSessionUpdate(BaseModel):
+    title: Optional[str] = None
+    file_id: Optional[str] = None
+    file_name: Optional[str] = None
 
 # AIConfiguration schemas
 class AIConfigurationCreate(BaseModel):

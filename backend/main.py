@@ -16,7 +16,7 @@ from database import SessionLocal, engine, Base
 from models import FileUpload, TestCase, ChatSession, AIConfiguration
 from schemas import (
     FileUploadResponse, TestCaseCreate, TestCaseUpdate, TestCaseResponse,
-    ChatSessionCreate, ChatSessionResponse, AIConfigurationCreate, AIConfigurationResponse,
+    ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse, AIConfigurationCreate, AIConfigurationResponse,
     AnalyzeRequest, AnalyzeResponse
 )
 from utils.file_processor import process_file
@@ -110,7 +110,20 @@ async def upload_file(
         db.add(db_file)
         db.commit()
         db.refresh(db_file)
-        
+
+        # 更新会话标题为文档名+测试用例格式
+        try:
+            session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+            if session:
+                new_title = generate_session_title(file.filename)
+                session.title = new_title
+                session.file_id = file_id
+                session.file_name = file.filename
+                db.commit()
+                logging.info(f"会话标题已更新: {new_title}")
+        except Exception as e:
+            logging.warning(f"更新会话标题失败: {e}")
+
         return FileUploadResponse(
             id=db_file.id,
             session_id=db_file.session_id,
@@ -128,6 +141,22 @@ async def upload_file(
         error_detail = f"文件上传失败: {str(e)}\n详细错误: {traceback.format_exc()}"
         print(f"[ERROR] {error_detail}")
         raise HTTPException(status_code=500, detail=error_detail)
+
+# 辅助函数：生成自动会话名称
+def generate_session_title(file_name: str) -> str:
+    """根据文件名生成会话标题"""
+    if not file_name:
+        return "新测试用例分析"
+
+    # 移除文件扩展名
+    base_name = os.path.splitext(file_name)[0]
+
+    # 如果文件名已经包含"测试用例"，直接返回
+    if "测试用例" in base_name:
+        return base_name
+
+    # 否则添加"测试用例"后缀
+    return f"{base_name}测试用例"
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze_document(
@@ -167,7 +196,7 @@ async def analyze_document(
 
         # 保存测试用例到数据库
         saved_cases = []
-        for case_data in test_cases:
+        for order_index, case_data in enumerate(test_cases):
             db_case = TestCase(
                 id=str(uuid.uuid4()),
                 session_id=request.session_id,
@@ -178,7 +207,8 @@ async def analyze_document(
                 step_description=case_data.get("step_description", ""),
                 expected_result=case_data.get("expected_result", ""),
                 case_level=case_data.get("case_level", "中"),
-                case_type=case_data.get("case_type", "功能测试")
+                case_type=case_data.get("case_type", "功能测试"),
+                ai_order=order_index  # 保存AI返回的原始顺序
             )
             db.add(db_case)
             saved_cases.append(db_case)
@@ -208,7 +238,7 @@ async def get_analysis_progress(file_id: str):
 @app.get("/api/test-cases/{session_id}", response_model=List[TestCaseResponse])
 async def get_test_cases(session_id: str, db: Session = Depends(get_db)):
     """获取测试用例列表"""
-    cases = db.query(TestCase).filter(TestCase.session_id == session_id).all()
+    cases = db.query(TestCase).filter(TestCase.session_id == session_id).order_by(TestCase.ai_order.asc(), TestCase.created_at.asc()).all()
     return [TestCaseResponse(
         id=case.id,
         session_id=case.session_id,
@@ -220,6 +250,7 @@ async def get_test_cases(session_id: str, db: Session = Depends(get_db)):
         expected_result=case.expected_result,
         case_level=case.case_level,
         case_type=case.case_type,
+        ai_order=case.ai_order,
         created_at=case.created_at,
         updated_at=case.updated_at
     ) for case in cases]
@@ -246,6 +277,7 @@ async def create_test_case(case: TestCaseCreate, db: Session = Depends(get_db)):
         expected_result=db_case.expected_result,
         case_level=db_case.case_level,
         case_type=db_case.case_type,
+        ai_order=db_case.ai_order,
         created_at=db_case.created_at,
         updated_at=db_case.updated_at
     )
@@ -279,6 +311,7 @@ async def update_test_case(
         expected_result=db_case.expected_result,
         case_level=db_case.case_level,
         case_type=db_case.case_type,
+        ai_order=db_case.ai_order,
         created_at=db_case.created_at,
         updated_at=db_case.updated_at
     )
@@ -297,12 +330,15 @@ async def delete_test_case(case_id: str, db: Session = Depends(get_db)):
 
 @app.get("/api/sessions", response_model=List[ChatSessionResponse])
 async def get_sessions(db: Session = Depends(get_db)):
-    """获取会话列表"""
-    sessions = db.query(ChatSession).order_by(ChatSession.created_at.desc()).all()
+    """获取会话列表（不包括已删除的）"""
+    sessions = db.query(ChatSession).filter(ChatSession.is_deleted == False).order_by(ChatSession.created_at.desc()).all()
     return [ChatSessionResponse(
         id=session.id,
         user_id=session.user_id,
         title=session.title,
+        file_id=session.file_id,
+        file_name=session.file_name,
+        is_deleted=session.is_deleted,
         created_at=session.created_at,
         updated_at=session.updated_at
     ) for session in sessions]
@@ -313,19 +349,73 @@ async def create_session(session: ChatSessionCreate, db: Session = Depends(get_d
     db_session = ChatSession(
         id=str(uuid.uuid4()),
         user_id=session.user_id or "default",
-        title=session.title
+        title=session.title,
+        file_id=session.file_id,
+        file_name=session.file_name
     )
     db.add(db_session)
     db.commit()
     db.refresh(db_session)
-    
+
     return ChatSessionResponse(
         id=db_session.id,
         user_id=db_session.user_id,
         title=db_session.title,
+        file_id=db_session.file_id,
+        file_name=db_session.file_name,
+        is_deleted=db_session.is_deleted,
         created_at=db_session.created_at,
         updated_at=db_session.updated_at
     )
+
+@app.put("/api/sessions/{session_id}", response_model=ChatSessionResponse)
+async def update_session(
+    session_id: str,
+    session_update: ChatSessionUpdate,
+    db: Session = Depends(get_db)
+):
+    """更新会话信息"""
+    db_session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.is_deleted == False).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="会话未找到")
+
+    update_data = session_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_session, field, value)
+
+    db.commit()
+    db.refresh(db_session)
+
+    return ChatSessionResponse(
+        id=db_session.id,
+        user_id=db_session.user_id,
+        title=db_session.title,
+        file_id=db_session.file_id,
+        file_name=db_session.file_name,
+        is_deleted=db_session.is_deleted,
+        created_at=db_session.created_at,
+        updated_at=db_session.updated_at
+    )
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str, db: Session = Depends(get_db)):
+    """删除会话（软删除）并删除关联的测试用例"""
+    db_session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.is_deleted == False).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="会话未找到")
+
+    try:
+        # 删除该会话关联的所有测试用例
+        db.query(TestCase).filter(TestCase.session_id == session_id).delete()
+
+        # 软删除会话
+        db_session.is_deleted = True
+        db.commit()
+
+        return {"message": "会话已删除"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"删除会话失败: {str(e)}")
 
 @app.get("/api/ai-config", response_model=List[AIConfigurationResponse])
 async def get_ai_configs(db: Session = Depends(get_db)):

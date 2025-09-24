@@ -685,38 +685,38 @@ const TestCasesPage: React.FC = () => {
           <div className="space-y-4">
             <Row gutter={16}>
               <Col span={12}>
-                <title level={5}>测试用例标题</title>
+                <Text strong>测试用例标题</Text>
                 <p>{viewingCase.title}</p>
               </Col>
               <Col span={12}>
-                <title level={5}>测试组</title>
+                <Text strong>测试组</Text>
                 <p>{viewingCase.group_name || '-'}</p>
               </Col>
             </Row>
             <Row gutter={16}>
               <Col span={8}>
-                <title level={5}>维护人</title>
+                <Text strong>维护人</Text>
                 <p>{viewingCase.maintainer || '-'}</p>
               </Col>
               <Col span={8}>
-                <title level={5}>优先级</title>
+                <Text strong>优先级</Text>
                 <p><Tag color={getLevelColor(viewingCase.case_level)}>{viewingCase.case_level}</Tag></p>
               </Col>
               <Col span={8}>
-                <title level={5}>测试类型</title>
+                <Text strong>测试类型</Text>
                 <p><Tag color={getTypeColor(viewingCase.case_type)}>{viewingCase.case_type}</Tag></p>
               </Col>
             </Row>
             <div>
-              <title level={5}>前置条件</title>
+              <Text strong>前置条件</Text>
               <pre className="whitespace-pre-wrap bg-gray-50 p-3 rounded">{viewingCase.precondition || '-'}</pre>
             </div>
             <div>
-              <title level={5}>测试步骤</title>
+              <Text strong>测试步骤</Text>
               <pre className="whitespace-pre-wrap bg-gray-50 p-3 rounded">{viewingCase.step_description || '-'}</pre>
             </div>
             <div>
-              <title level={5}>预期结果</title>
+              <Text strong>预期结果</Text>
               <pre className="whitespace-pre-wrap bg-gray-50 p-3 rounded">{viewingCase.expected_result || '-'}</pre>
             </div>
           </div>

@@ -124,7 +124,7 @@ const SettingsPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span>{config.provider}</span>
                       {config.is_active && (
-                        <Tag color="green" size="small">
+                        <Tag color="green">
                           当前使用
                         </Tag>
                       )}

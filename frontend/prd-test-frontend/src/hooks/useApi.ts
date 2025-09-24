@@ -12,15 +12,47 @@ export const useSessions = () => {
 
 export const useCreateSession = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: api.createSession,
+    mutationFn: ({ title, fileId, fileName }: { title: string; fileId?: string; fileName?: string }) =>
+      api.createSession(title, fileId, fileName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       message.success('会话创建成功');
     },
     onError: () => {
       message.error('会话创建失败');
+    },
+  });
+};
+
+export const useUpdateSession = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api.updateSession(id, title),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      message.success('会话重命名成功');
+    },
+    onError: () => {
+      message.error('会话重命名失败');
+    },
+  });
+};
+
+export const useDeleteSession = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: api.deleteSession,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      message.success('会话删除成功');
+    },
+    onError: () => {
+      message.error('会话删除失败');
     },
   });
 };

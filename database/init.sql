@@ -34,12 +34,14 @@ CREATE TABLE test_cases (
     expected_result TEXT,
     case_level VARCHAR(50) DEFAULT '中',
     case_type VARCHAR(50) DEFAULT '功能测试',
+    ai_order BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_session_id (session_id),
     INDEX idx_created_at (created_at),
     INDEX idx_case_level (case_level),
-    INDEX idx_case_type (case_type)
+    INDEX idx_case_type (case_type),
+    INDEX idx_ai_order (ai_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 会话表
@@ -47,10 +49,15 @@ CREATE TABLE chat_sessions (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36),
     title VARCHAR(255) NOT NULL,
+    file_id VARCHAR(36),  -- 关联的文件ID
+    file_name VARCHAR(255),  -- 原始文件名
+    is_deleted BOOLEAN DEFAULT FALSE,  -- 软删除标记
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),
-    INDEX idx_created_at (created_at)
+    INDEX idx_created_at (created_at),
+    INDEX idx_file_id (file_id),
+    INDEX idx_is_deleted (is_deleted)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- AI配置表
