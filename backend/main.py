@@ -133,6 +133,7 @@ async def upload_file(
             file_size=db_file.file_size,
             upload_status=db_file.upload_status,
             extracted_content=db_file.extracted_content,
+            analysis_suggestions=db_file.analysis_suggestions,
             created_at=db_file.created_at
         )
     
@@ -184,15 +185,24 @@ async def analyze_document(
             # 将进度保存到内存中，可以通过另一个接口查询
             analysis_progress[request.file_id] = message
 
-        test_cases = await analyze_with_ai_enhanced(
+        test_cases, analysis_suggestions = await analyze_with_ai_enhanced(
             content=file_upload.extracted_content,
             ai_config=ai_config,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            file_name=file_upload.file_name
         )
         
         # 检查是否生成了有效的测试用例
         if not test_cases:
             raise Exception("AI未能生成任何有效的测试用例。请检查文档内容是否包含明确的功能需求，或AI服务配置是否正确。")
+
+        # 保存分析建议到文件上传记录
+        try:
+            file_upload.analysis_suggestions = analysis_suggestions
+            db.commit()
+            logging.info(f"已保存分析建议到文件记录，长度: {len(analysis_suggestions)} 字符")
+        except Exception as e:
+            logging.warning(f"保存分析建议失败: {e}")
 
         # 保存测试用例到数据库
         saved_cases = []
@@ -208,7 +218,8 @@ async def analyze_document(
                 expected_result=case_data.get("expected_result", ""),
                 case_level=case_data.get("case_level", "中"),
                 case_type=case_data.get("case_type", "功能测试"),
-                ai_order=order_index  # 保存AI返回的原始顺序
+                ai_order=order_index,  # 保存AI返回的原始顺序
+                test_suggestions=case_data.get("test_suggestions", "")  # 保存测试建议
             )
             db.add(db_case)
             saved_cases.append(db_case)
@@ -251,6 +262,7 @@ async def get_test_cases(session_id: str, db: Session = Depends(get_db)):
         case_level=case.case_level,
         case_type=case.case_type,
         ai_order=case.ai_order,
+        test_suggestions=case.test_suggestions,
         created_at=case.created_at,
         updated_at=case.updated_at
     ) for case in cases]
@@ -278,6 +290,7 @@ async def create_test_case(case: TestCaseCreate, db: Session = Depends(get_db)):
         case_level=db_case.case_level,
         case_type=db_case.case_type,
         ai_order=db_case.ai_order,
+        test_suggestions=db_case.test_suggestions,
         created_at=db_case.created_at,
         updated_at=db_case.updated_at
     )
@@ -312,6 +325,7 @@ async def update_test_case(
         case_level=db_case.case_level,
         case_type=db_case.case_type,
         ai_order=db_case.ai_order,
+        test_suggestions=db_case.test_suggestions,
         created_at=db_case.created_at,
         updated_at=db_case.updated_at
     )

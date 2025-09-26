@@ -4,7 +4,7 @@ from database import Base
 
 class FileUpload(Base):
     __tablename__ = "file_uploads"
-    
+
     id = Column(String(36), primary_key=True)
     session_id = Column(String(36))
     file_name = Column(String(255), nullable=False)
@@ -13,6 +13,7 @@ class FileUpload(Base):
     file_size = Column(BigInteger)
     upload_status = Column(String(20), default="completed")
     extracted_content = Column(LONGTEXT)
+    analysis_suggestions = Column(Text)  # AI生成的整体分析建议
     created_at = Column(DateTime, server_default=func.now())
 
 class TestCase(Base):
@@ -29,6 +30,7 @@ class TestCase(Base):
     case_level = Column(String(50))
     case_type = Column(String(50))
     ai_order = Column(BigInteger)  # AI返回的原始顺序
+    test_suggestions = Column(Text)  # AI生成的测试建议
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

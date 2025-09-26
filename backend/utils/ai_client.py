@@ -2,6 +2,7 @@ import httpx
 import json
 import re
 import logging
+import ast
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from models import AIConfiguration
@@ -89,9 +90,10 @@ def smart_split_content(content: str, max_tokens: int = 3000) -> List[str]:
 
     return final_sections
 
-async def analyze_with_ai_enhanced(content: str, ai_config: AIConfiguration, progress_callback=None) -> List[Dict[str, Any]]:
+async def analyze_with_ai_enhanced(content: str, ai_config: AIConfiguration, progress_callback=None, file_name=None) -> tuple[List[Dict[str, Any]], str]:
     """
     增强版AI分析函数，支持大文档分块分析
+    返回：(测试用例列表, 整体分析建议)
     """
     try:
         # 估算token数量
@@ -100,13 +102,17 @@ async def analyze_with_ai_enhanced(content: str, ai_config: AIConfiguration, pro
 
         # 如果内容较小，直接使用原始方法
         if total_tokens <= 3000:
-            return await analyze_with_ai(content, ai_config)
+            test_cases = await analyze_with_ai(content, ai_config)
+            # 为小文档生成简单的分析建议
+            analysis_suggestions = "建议进行全面的功能测试，覆盖所有业务流程和异常情况。"
+            return test_cases, analysis_suggestions
 
         # 大文档分块处理
         chunks = smart_split_content(content, max_tokens=3500)  # 增加token限制，减少过度分割
         logging.info(f"文档被分割为 {len(chunks)} 个块进行分析")
 
         all_test_cases = []
+        all_analysis_suggestions = []
 
         for i, chunk in enumerate(chunks):
             if progress_callback:
@@ -114,51 +120,84 @@ async def analyze_with_ai_enhanced(content: str, ai_config: AIConfiguration, pro
 
             logging.info(f"分析第 {i+1} 个块，大小: {estimate_token_count(chunk)} tokens")
 
-            # 为每个块生成专门的提示词
+            # 为每个块生成专门的提示词 - 增强版，重点强调分析建议
             chunk_prompt = f"""
-请详细分析以下产品需求文档片段，并生成全面、详细的测试用例。
+请详细分析以下产品需求文档片段，并生成全面、详细的测试用例和针对这部分内容的专门测试建议。
 
-这是第 {i+1} 部分（共 {len(chunks)} 部分），请重点关注这部分的功能需求和业务逻辑。
+这是第 {i+1} 部分（共 {len(chunks)} 部分），请重点关注这部分的功能需求、业务逻辑和技术实现细节。
 
 文档内容片段：
 {chunk}
 
-请按照以下格式返回JSON数组，每个测试用例包含以下字段：
+请按照以下格式返回JSON对象，必须包含测试用例数组和这部分的专门分析建议：
 
 ```json
-[
-  {{
-    "title": "测试用例标题",
-    "group_name": "测试组名称",
-    "maintainer": "维护人",
-    "precondition": "前置条件",
-    "step_description": "测试步骤（每个步骤一行）",
-    "expected_result": "预期结果",
-    "case_level": "优先级（高/中/低）",
-    "case_type": "测试类型（功能测试/性能测试/安全测试/兼容性测试）"
-  }}
-]
+{{
+  "test_cases": [
+    {{
+      "title": "测试用例标题",
+      "group_name": "测试组名称",
+      "maintainer": "维护人",
+      "precondition": "前置条件",
+      "step_description": "测试步骤（每个步骤一行）",
+      "expected_result": "预期结果",
+      "case_level": "优先级（高/中/低）",
+      "case_type": "测试类型（功能测试/性能测试/安全测试/兼容性测试）",
+      "test_suggestions": "针对此测试用例的具体建议，如测试数据准备、注意事项、关联测试等"
+    }}
+  ],
+  "analysis_suggestions": "针对这部分文档内容的专门测试策略分析和建议"
+}}
 ```
 
-要求：
-1. 针对这部分文档内容生成详细的测试用例
-2. 测试用例必须覆盖所有功能点、业务场景、边界条件和异常情况
-3. 包括但不限于：正常流程、异常流程、边界值、数据验证、权限控制等
-4. 步骤描述要清晰、具体、可执行
-5. 预期结果要明确、可验证、无歧义
-6. 区分不同优先级：核心业务（高）、主要功能（中）、非核心功能（低）
-7. 包含多种测试类型：功能测试、性能测试、安全测试、兼容性测试等
-8. 如果这部分有多个功能模块，每个模块都要有对应的测试用例
-9. 考虑用户操作的各种可能性和错误场景
+**重要要求**：
 
-请直接返回JSON数组，不要包含其他文本。确保JSON格式正确且无语法错误。
+1. **测试用例生成**：
+   - 针对这部分文档内容生成详细的测试用例
+   - 测试用例必须覆盖所有功能点、业务场景、边界条件和异常情况
+   - 包括但不限于：正常流程、异常流程、边界值、数据验证、权限控制等
+   - 步骤描述要清晰、具体、可执行
+   - 预期结果要明确、可验证、无歧义
+   - 区分不同优先级：核心业务（高）、主要功能（中）、非核心功能（低）
+   - 包含多种测试类型：功能测试、性能测试、安全测试、兼容性测试等
+   - 如果这部分有多个功能模块，每个模块都要有对应的测试用例
+   - 考虑用户操作的各种可能性和错误场景
+   - 为每个测试用例提供具体的测试建议
+
+2. **分析建议生成**（重点关注）：
+   - **必须**在"analysis_suggestions"字段中，提供针对这部分文档内容的专门测试策略分析
+   - 分析这部分功能的技术特点和业务逻辑
+   - 指出这部分功能的潜在风险点和测试难点
+   - 推荐针对这部分功能的专门测试方法和测试工具
+   - 说明这部分功能与其他模块的依赖关系和集成测试要点
+   - 提供这部分功能的测试数据准备建议
+   - 分析这部分功能的性能和安全测试要点
+
+3. **内容针对性**：
+   - 分析建议必须基于这部分文档的具体内容，不能是通用模板
+   - 要体现对这部分业务逻辑和技术实现的深入理解
+   - 提供实用的、可操作的测试指导建议
+
+**格式要求**：
+- 确保生成的JSON格式完全正确
+- 所有字段都必须有值，不能有空值或缺失字段
+- 测试用例必须包含所有必需字段
+- analysis_suggestions字段必须包含有价值的分析内容，不能留空
+
+请直接返回JSON对象，不要包含其他文本。确保JSON格式正确且无语法错误。
             """
 
             try:
-                chunk_cases = await analyze_chunk_with_ai(chunk_prompt, ai_config)
-                if chunk_cases:  # 只有在成功获取测试用例时才添加
-                    all_test_cases.extend(chunk_cases)
-                    logging.info(f"第 {i+1} 个块分析完成，生成 {len(chunk_cases)} 个测试用例")
+                chunk_result = await analyze_chunk_with_ai_new(chunk_prompt, ai_config)
+                if chunk_result and isinstance(chunk_result, dict) and "test_cases" in chunk_result:
+                    all_test_cases.extend(chunk_result["test_cases"])
+                    # 收集分析建议
+                    if "analysis_suggestions" in chunk_result and chunk_result["analysis_suggestions"]:
+                        all_analysis_suggestions.append(chunk_result["analysis_suggestions"])
+                    logging.info(f"第 {i+1} 个块分析完成，生成 {len(chunk_result['test_cases'])} 个测试用例")
+                elif isinstance(chunk_result, list):  # 兼容旧格式
+                    all_test_cases.extend(chunk_result)
+                    logging.info(f"第 {i+1} 个块分析完成，生成 {len(chunk_result)} 个测试用例")
                 else:
                     logging.warning(f"第 {i+1} 个块未生成测试用例，继续处理下一个块")
             except Exception as e:
@@ -169,17 +208,32 @@ async def analyze_with_ai_enhanced(content: str, ai_config: AIConfiguration, pro
         unique_cases = deduplicate_test_cases(all_test_cases)
         logging.info(f"分析完成，共生成 {len(unique_cases)} 个去重后的测试用例")
 
+        # 合并所有分析建议 - 使用AI生成的建议，如果没有则生成简单的提示
+        if all_analysis_suggestions:
+            # 使用AI生成的分析建议
+            combined_suggestions = "\n\n".join(all_analysis_suggestions)
+            logging.info(f"使用AI生成的分析建议，共 {len(all_analysis_suggestions)} 条")
+        else:
+            # 只有在AI确实没有生成任何建议时才使用简单的提示
+            combined_suggestions = f"""
+基于对《{file_name or '当前文档'}》的分析，AI已为您生成了 {len(unique_cases)} 个详细的测试用例。
+
+文档分析完成，请查看具体的测试用例以获取针对本PRD的详细测试建议。
+每个测试用例都包含了具体的测试建议，可帮助您更好地执行测试。
+"""
+            logging.info("AI未生成整体分析建议，使用简单提示")
+
         if progress_callback:
             progress_callback("分析完成，正在优化结果...")
 
-        return unique_cases
+        return unique_cases, combined_suggestions
 
     except Exception as e:
         logging.error(f"增强版AI分析错误: {str(e)}")
         # 直接抛出异常，不再返回默认测试用例
         raise Exception(f"AI分析失败: {str(e)}")
 
-async def analyze_chunk_with_ai(prompt: str, ai_config: AIConfiguration) -> List[Dict[str, Any]]:
+async def analyze_chunk_with_ai_new(prompt: str, ai_config: AIConfiguration) -> Dict[str, Any]:
     """分析单个块的AI请求"""
     try:
         request_data = {
@@ -260,10 +314,13 @@ async def analyze_chunk_with_ai(prompt: str, ai_config: AIConfiguration) -> List
 
         # 方法1: 直接尝试解析整个响应
         try:
-            test_cases = json.loads(ai_response)
-            if isinstance(test_cases, list):
-                logging.info("直接JSON解析成功")
-                return test_cases
+            result = json.loads(ai_response)
+            if isinstance(result, dict) and "test_cases" in result:
+                logging.info("直接JSON解析成功 - 新格式")
+                return result
+            elif isinstance(result, list):
+                logging.info("直接JSON解析成功 - 旧格式")
+                return {"test_cases": result, "analysis_suggestions": ""}
         except Exception as e:
             logging.info(f"直接JSON解析失败: {e}")
             logging.info(f"失败时的响应类型: {type(ai_response)}")
@@ -280,14 +337,17 @@ async def analyze_chunk_with_ai(prompt: str, ai_config: AIConfiguration) -> List
                 json_end = ai_response.find('```', json_start)
                 if json_end != -1:
                     json_content = ai_response[json_start:json_end].strip()
-                    test_cases = json.loads(json_content)
-                    if isinstance(test_cases, list):
-                        logging.info("```json代码块解析成功")
-                        return test_cases
+                    result = json.loads(json_content)
+                    if isinstance(result, dict) and "test_cases" in result:
+                        logging.info("```json代码块解析成功 - 新格式")
+                        return result
+                    elif isinstance(result, list):
+                        logging.info("```json代码块解析成功 - 旧格式")
+                        return {"test_cases": result, "analysis_suggestions": ""}
         except Exception as e:
             logging.info(f"```json代码块解析失败: {e}")
 
-        # 方法3: 提取任何```代码块中的JSON数组
+        # 方法3: 提取任何```代码块中的JSON
         try:
             code_start = ai_response.find('```')
             if code_start != -1:
@@ -296,24 +356,35 @@ async def analyze_chunk_with_ai(prompt: str, ai_config: AIConfiguration) -> List
                 if code_end != -1:
                     code_content = ai_response[code_start:code_end].strip()
                     # 尝试解析代码块内容
-                    test_cases = json.loads(code_content)
-                    if isinstance(test_cases, list):
-                        logging.info("```代码块解析成功")
-                        return test_cases
+                    result = json.loads(code_content)
+                    if isinstance(result, dict) and "test_cases" in result:
+                        logging.info("```代码块解析成功 - 新格式")
+                        return result
+                    elif isinstance(result, list):
+                        logging.info("```代码块解析成功 - 旧格式")
+                        return {"test_cases": result, "analysis_suggestions": ""}
         except Exception as e:
             logging.info(f"```代码块解析失败: {e}")
 
-        # 方法4: 使用正则表达式提取JSON数组
+        # 方法4: 使用正则表达式提取JSON对象或数组
         try:
+            # 首先尝试匹配包含test_cases的对象
+            json_match = re.search(r'\{[\s\S]*"test_cases"[\s\S]*\}', ai_response)
+            if json_match:
+                result = json.loads(json_match.group())
+                if isinstance(result, dict) and "test_cases" in result:
+                    logging.info("正则表达式JSON对象解析成功 - 新格式")
+                    return result
+
+            # 如果没有找到对象，尝试匹配数组
             json_match = re.search(r'\[[\s\S]*\]', ai_response)
             if json_match:
-                json_content = json_match.group()
-                test_cases = json.loads(json_content)
-                if isinstance(test_cases, list):
-                    logging.info("正则表达式JSON数组解析成功")
-                    return test_cases
+                result = json.loads(json_match.group())
+                if isinstance(result, list):
+                    logging.info("正则表达式JSON数组解析成功 - 旧格式")
+                    return {"test_cases": result, "analysis_suggestions": ""}
         except Exception as e:
-            logging.info(f"正则表达式JSON数组解析失败: {e}")
+            logging.info(f"正则表达式JSON解析失败: {e}")
 
         # 方法5: 处理截断的JSON响应 - 尝试修复不完整的JSON
         try:
@@ -323,18 +394,21 @@ async def analyze_chunk_with_ai(prompt: str, ai_config: AIConfiguration) -> List
             fixed_json = ai_response
 
             # 如果响应被截断，尝试补全
-            if not fixed_json.strip().endswith(']'):
+            if not fixed_json.strip().endswith('}'):
                 # 查找最后一个完整的对象
                 last_complete_obj = fixed_json.rfind('}')
                 if last_complete_obj != -1:
-                    # 移除不完整的部分，补全数组
-                    fixed_json = fixed_json[:last_complete_obj + 1] + '\n]'
+                    # 移除不完整的部分，补全对象
+                    fixed_json = fixed_json[:last_complete_obj + 1]
                     logging.info(f"尝试修复JSON，原长度: {len(ai_response)}, 修复后长度: {len(fixed_json)}")
 
-                    test_cases = json.loads(fixed_json)
-                    if isinstance(test_cases, list):
-                        logging.info(f"截断JSON修复成功，获得 {len(test_cases)} 个测试用例")
-                        return test_cases
+                    result = json.loads(fixed_json)
+                    if isinstance(result, dict) and "test_cases" in result:
+                        logging.info(f"截断JSON修复成功 - 新格式，获得 {len(result.get('test_cases', []))} 个测试用例")
+                        return result
+                    elif isinstance(result, list):
+                        logging.info(f"截断JSON修复成功 - 旧格式，获得 {len(result)} 个测试用例")
+                        return {"test_cases": result, "analysis_suggestions": ""}
         except Exception as e:
             logging.info(f"截断JSON修复失败: {e}")
 
@@ -349,9 +423,59 @@ async def analyze_chunk_with_ai(prompt: str, ai_config: AIConfiguration) -> List
                 test_cases = json.loads(json_array)
                 if isinstance(test_cases, list) and len(test_cases) > 0:
                     logging.info(f"提取完整JSON对象成功，获得 {len(test_cases)} 个测试用例")
-                    return test_cases
+                    return {"test_cases": test_cases, "analysis_suggestions": ""}
         except Exception as e:
             logging.info(f"提取完整JSON对象失败: {e}")
+
+        # 方法7: 使用Python的ast.literal_eval作为最后手段
+        try:
+            logging.info("尝试使用ast.literal_eval解析")
+            # 提取看起来最像JSON数组的部分
+            json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
+            if json_match:
+                json_content = json_match.group()
+                # 尝试修复常见的JSON语法错误
+                # 1. 移除尾随逗号
+                json_content = re.sub(r',(\s*[}\]])', r'\1', json_content)
+                # 2. 确保字符串引号正确
+                json_content = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', json_content)
+
+                test_cases = ast.literal_eval(json_content)
+                if isinstance(test_cases, list) and len(test_cases) > 0:
+                    logging.info(f"ast.literal_eval解析成功，获得 {len(test_cases)} 个测试用例")
+                    return {"test_cases": test_cases, "analysis_suggestions": ""}
+        except Exception as e:
+            logging.info(f"ast.literal_eval解析失败: {e}")
+
+        # 方法8: 手动提取测试用例信息
+        try:
+            logging.info("尝试手动提取测试用例信息")
+            test_cases = []
+
+            # 查找所有看起来像是测试用例的对象
+            case_pattern = r'\{\s*"title":\s*"([^"]*)"[^}]*\}'
+            matches = re.findall(case_pattern, ai_response, re.DOTALL)
+
+            if matches:
+                for i, title in enumerate(matches):
+                    test_case = {
+                        "title": title,
+                        "group_name": f"功能组{i+1}",
+                        "maintainer": "测试人员",
+                        "precondition": "系统正常运行",
+                        "step_description": "请补充具体测试步骤",
+                        "expected_result": "请补充预期结果",
+                        "case_level": "中",
+                        "case_type": "功能测试",
+                        "test_suggestions": ""
+                    }
+                    test_cases.append(test_case)
+
+                if test_cases:
+                    logging.info(f"手动提取成功，获得 {len(test_cases)} 个基础测试用例")
+                    return {"test_cases": test_cases, "analysis_suggestions": ""}
+        except Exception as e:
+            logging.info(f"手动提取失败: {e}")
 
         # 所有方法都失败
         error_msg = f"所有JSON提取方法都失败。AI响应内容: {ai_response[:500]}..."
@@ -440,7 +564,8 @@ def deduplicate_test_cases(test_cases: List[Dict[str, Any]]) -> List[Dict[str, A
             "step_description": case.get("step_description", "请补充测试步骤").strip() or "请补充测试步骤",
             "expected_result": case.get("expected_result", "请补充预期结果").strip() or "请补充预期结果",
             "case_level": case.get("case_level", "中").strip() or "中",
-            "case_type": case.get("case_type", "功能测试").strip() or "功能测试"
+            "case_type": case.get("case_type", "功能测试").strip() or "功能测试",
+            "test_suggestions": case.get("test_suggestions", "").strip() or ""
         }
 
         unique_cases.append(standardized_case)
@@ -590,30 +715,63 @@ async def analyze_with_ai(content: str, ai_config: AIConfiguration) -> List[Dict
                 logging.error(error_msg)
                 raise Exception(error_msg)
         
-        # 验证数据格式
-        if not isinstance(test_cases, list):
-            raise Exception(f"AI返回的数据格式错误，期望是列表，实际得到: {type(test_cases)}。数据内容: {str(test_cases)[:200]}...")
-        
-        # 确保每个测试用例都有必要的字段
-        validated_cases = []
-        for case in test_cases:
-            if isinstance(case, dict) and "title" in case:
-                validated_case = {
-                    "title": case.get("title", "未命名测试用例"),
-                    "group_name": case.get("group_name", "默认组"),
-                    "maintainer": case.get("maintainer", "测试人员"),
-                    "precondition": case.get("precondition", "无"),
-                    "step_description": case.get("step_description", "请补充测试步骤"),
-                    "expected_result": case.get("expected_result", "请补充预期结果"),
-                    "case_level": case.get("case_level", "中"),
-                    "case_type": case.get("case_type", "功能测试")
-                }
-                validated_cases.append(validated_case)
-        
-        if not validated_cases:
-            raise Exception("AI生成的测试用例列表为空或格式不正确，请检查AI响应内容是否包含有效的测试用例数据")
+        # 检查返回格式是否是包含test_cases的字典
+        if isinstance(test_cases, dict) and "test_cases" in test_cases:
+            # 新的返回格式
+            result = {
+                "test_cases": [],
+                "analysis_suggestions": test_cases.get("analysis_suggestions", "")
+            }
 
-        return validated_cases
+            # 确保每个测试用例都有必要的字段
+            for case in test_cases["test_cases"]:
+                if isinstance(case, dict) and "title" in case:
+                    validated_case = {
+                        "title": case.get("title", "未命名测试用例"),
+                        "group_name": case.get("group_name", "默认组"),
+                        "maintainer": case.get("maintainer", "测试人员"),
+                        "precondition": case.get("precondition", "无"),
+                        "step_description": case.get("step_description", "请补充测试步骤"),
+                        "expected_result": case.get("expected_result", "请补充预期结果"),
+                        "case_level": case.get("case_level", "中"),
+                        "case_type": case.get("case_type", "功能测试"),
+                        "test_suggestions": case.get("test_suggestions", "")
+                    }
+                    result["test_cases"].append(validated_case)
+
+            if not result["test_cases"]:
+                raise Exception("AI生成的测试用例列表为空或格式不正确")
+
+            return result
+
+        elif isinstance(test_cases, list):
+            # 兼容旧的返回格式
+            result = {
+                "test_cases": [],
+                "analysis_suggestions": ""
+            }
+
+            for case in test_cases:
+                if isinstance(case, dict) and "title" in case:
+                    validated_case = {
+                        "title": case.get("title", "未命名测试用例"),
+                        "group_name": case.get("group_name", "默认组"),
+                        "maintainer": case.get("maintainer", "测试人员"),
+                        "precondition": case.get("precondition", "无"),
+                        "step_description": case.get("step_description", "请补充测试步骤"),
+                        "expected_result": case.get("expected_result", "请补充预期结果"),
+                        "case_level": case.get("case_level", "中"),
+                        "case_type": case.get("case_type", "功能测试"),
+                        "test_suggestions": case.get("test_suggestions", "")
+                    }
+                    result["test_cases"].append(validated_case)
+
+            if not result["test_cases"]:
+                raise Exception("AI生成的测试用例列表为空或格式不正确")
+
+            return result
+        else:
+            raise Exception(f"AI返回的数据格式错误，期望是字典或列表，实际得到: {type(test_cases)}")
     
     except Exception as e:
         logging.error(f"AI分析错误: {str(e)}")

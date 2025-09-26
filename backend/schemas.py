@@ -12,6 +12,7 @@ class FileUploadResponse(BaseModel):
     file_size: Optional[int]
     upload_status: str
     extracted_content: Optional[str]
+    analysis_suggestions: Optional[str]
     created_at: datetime
 
     class Config:
@@ -28,6 +29,7 @@ class TestCaseBase(BaseModel):
     case_level: Optional[str] = "中"
     case_type: Optional[str] = "功能测试"
     ai_order: Optional[int] = None
+    test_suggestions: Optional[str] = None
 
 class TestCaseCreate(TestCaseBase):
     session_id: str
@@ -41,6 +43,7 @@ class TestCaseUpdate(BaseModel):
     expected_result: Optional[str] = None
     case_level: Optional[str] = None
     case_type: Optional[str] = None
+    test_suggestions: Optional[str] = None
 
 class TestCaseResponse(TestCaseBase):
     id: str
