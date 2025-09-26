@@ -128,6 +128,7 @@ const HomePage: React.FC = () => {
         ...prev,
         uploaded: true,
         fileId: result.id,
+        analysis_suggestions: result.analysis_suggestions,
       }));
 
       // 刷新会话列表和当前会话（因为后端可能更新了会话标题）
@@ -361,6 +362,23 @@ const HomePage: React.FC = () => {
               {extractedContent.length > 500 && '...'}
             </Text>
           </div>
+
+          {/* AI分析建议 */}
+          {uploadedFile?.analysis_suggestions && (
+            <div className="mt-4">
+              <Alert
+                message="AI分析建议"
+                description={
+                  <div>
+                    <pre className="whitespace-pre-wrap text-sm">{uploadedFile.analysis_suggestions}</pre>
+                  </div>
+                }
+                type="info"
+                className="mt-4"
+                showIcon
+              />
+            </div>
+          )}
         </Card>
       )}
 

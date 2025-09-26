@@ -618,6 +618,13 @@ const TestCasesPage: React.FC = () => {
             />
           </Form.Item>
 
+          <Form.Item name="test_suggestions" label="AI测试建议">
+            <TextArea
+              rows={3}
+              placeholder="请输入AI生成的测试建议，如测试数据准备、注意事项等"
+            />
+          </Form.Item>
+
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
@@ -719,6 +726,19 @@ const TestCasesPage: React.FC = () => {
               <Text strong>预期结果</Text>
               <pre className="whitespace-pre-wrap bg-gray-50 p-3 rounded">{viewingCase.expected_result || '-'}</pre>
             </div>
+            {viewingCase.test_suggestions && (
+              <div>
+                <Text strong>AI测试建议</Text>
+                <Alert
+                  message="AI生成的测试建议"
+                  description={
+                    <pre className="whitespace-pre-wrap">{viewingCase.test_suggestions}</pre>
+                  }
+                  type="info"
+                  className="mt-2"
+                />
+              </div>
+            )}
           </div>
         )}
       </Modal>
