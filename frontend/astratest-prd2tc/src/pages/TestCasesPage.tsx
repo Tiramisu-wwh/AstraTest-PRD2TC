@@ -31,6 +31,7 @@ import {
   FileExcelOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
+import * as XLSX from 'xlsx';
 import { useSession } from '../contexts/SessionContext';
 import {
   useTestCases,
@@ -157,42 +158,103 @@ const TestCasesPage: React.FC = () => {
     }
 
     try {
-      // 创建 CSV 数据
-      const headers = [
-        '测试用例标题',
-        '测试组',
-        '维护人',
-        '前置条件',
-        '测试步骤',
-        '预期结果',
-        '优先级',
-        '类型',
-        '状态',
-        '创建时间',
+      // 创建工作簿
+      const workbook = XLSX.utils.book_new();
+
+      // 准备数据，严格按照Excel模板格式
+      const exportData = filteredTestCases.map((item, index) => ({
+        '标题*': item.title || '',
+        '所属分组': item.group_name || '',
+        '维护人': item.maintainer || '',
+        '前置条件': item.precondition || '',
+        '步骤描述': item.step_description || '',
+        '预期结果': item.expected_result || '',
+        '用例等级': item.case_level || '中',
+        '用例类型': item.case_type || '功能测试',
+      }));
+
+      // 添加表头说明行（第一行）
+      const headerNotes = [
+        {
+          '标题*': '填写规则和示例内容勿删',
+          '所属分组': '所属分组、维护人、用例类型、用例等级必须与已有信息相匹配',
+          '维护人': '填写错误将导致无法导入',
+          '前置条件': '',
+          '步骤描述': '',
+          '预期结果': '',
+          '用例等级': '',
+          '用例类型': '',
+        }
       ];
 
-      const csvContent = [
-        headers.join(','),
-        ...filteredTestCases.map(item => [
-          `"${item.title || ''}"`,
-          `"${item.group_name || ''}"`,
-          `"${item.maintainer || ''}"`,
-          `"${(item.precondition || '').replace(/"/g, '""')}"`,
-          `"${(item.step_description || '').replace(/"/g, '""')}"`,
-          `"${(item.expected_result || '').replace(/"/g, '""')}"`,
-          `"${item.case_level || ''}"`,
-          `"${item.case_type || ''}"`,
-          `"${item.status || ''}"`,
-          `"${new Date(item.created_at).toLocaleString('zh-CN')}"`,
-        ].join(','))
-      ].join('\n');
+      // 添加列标题行（第二行）
+      const headers = [
+        {
+          '标题*': '标题*',
+          '所属分组': '所属分组',
+          '维护人': '维护人',
+          '前置条件': '前置条件',
+          '步骤描述': '步骤描述',
+          '预期结果': '预期结果',
+          '用例等级': '用例等级',
+          '用例类型': '用例类型',
+        }
+      ];
+
+      // 添加示例数据行（第三行）
+      const exampleData = [
+        {
+          '标题*': '（示例勿删）待办列表测试',
+          '所属分组': 'Web端测试用例|首页|我的待办',
+          '维护人': '王XX',
+          '前置条件': '我的待办中存在待处理的任务',
+          '步骤描述': '【1】显示当前未处理的任务\n【2】可以正常进入任务详情',
+          '预期结果': '【1】显示当前未处理的任务\n【2】可以正常进入任务详情',
+          '用例等级': '中',
+          '用例类型': '功能测试',
+        }
+      ];
+
+      // 合并所有数据：说明行 + 标题行 + 示例行 + 实际数据
+      const allData = [...headerNotes, ...headers, ...exampleData, ...exportData];
+
+      // 创建工作表
+      const worksheet = XLSX.utils.json_to_sheet(allData, { skipHeader: true });
+
+      // 设置列宽
+      const colWidths = [
+        { wch: 30 }, // 标题
+        { wch: 25 }, // 所属分组
+        { wch: 15 }, // 维护人
+        { wch: 30 }, // 前置条件
+        { wch: 40 }, // 步骤描述
+        { wch: 40 }, // 预期结果
+        { wch: 10 }, // 用例等级
+        { wch: 12 }, // 用例类型
+      ];
+      worksheet['!cols'] = colWidths;
+
+      // 设置行高 - 第一行说明行加高
+      const rowHeights = [
+        { hpt: 20 }, // 说明行
+        { hpt: 16 }, // 标题行
+        { hpt: 16 }, // 示例行
+        ...exportData.map(() => ({ hpt: 14 })), // 数据行
+      ];
+      worksheet['!rows'] = rowHeights;
+
+      // 添加工作表到工作簿
+      XLSX.utils.book_append_sheet(workbook, worksheet, '测试用例');
+
+      // 生成Excel文件
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
       // 下载文件
-      const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `测试用例_${currentSession?.title}_${new Date().getTime()}.csv`);
+      link.setAttribute('download', `测试用例_${currentSession?.title}_${new Date().getTime()}.xlsx`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -261,7 +323,7 @@ const TestCasesPage: React.FC = () => {
 
   const columns: ColumnsType<TestCase> = [
     {
-      title: '测试用例标题',
+      title: '标题*',
       dataIndex: 'title',
       key: 'title',
       width: 250,
@@ -275,7 +337,7 @@ const TestCasesPage: React.FC = () => {
       ),
     },
     {
-      title: '测试组',
+      title: '所属分组',
       dataIndex: 'group_name',
       key: 'group_name',
       width: 120,
@@ -292,7 +354,7 @@ const TestCasesPage: React.FC = () => {
       width: 100,
     },
     {
-      title: '优先级',
+      title: '用例等级',
       dataIndex: 'case_level',
       key: 'case_level',
       width: 80,
@@ -306,7 +368,7 @@ const TestCasesPage: React.FC = () => {
       onFilter: (value: any, record) => record.case_level === value,
     },
     {
-      title: '类型',
+      title: '用例类型',
       dataIndex: 'case_type',
       key: 'case_type',
       width: 100,
@@ -462,7 +524,7 @@ const TestCasesPage: React.FC = () => {
         <Row gutter={16} align="middle">
           <Col span={8}>
             <Input
-              placeholder="搜索测试用例标题、内容、维护人..."
+              placeholder="搜索标题*、所属分组、维护人、前置条件、步骤描述、预期结果..."
               prefix={<SearchOutlined />}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -577,7 +639,7 @@ const TestCasesPage: React.FC = () => {
 
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="group_name" label="测试组">
+              <Form.Item name="group_name" label="所属分组">
                 <Input placeholder="请输入测试组名称" />
               </Form.Item>
             </Col>
@@ -604,17 +666,17 @@ const TestCasesPage: React.FC = () => {
             />
           </Form.Item>
 
-          <Form.Item name="step_description" label="测试步骤">
+          <Form.Item name="step_description" label="步骤描述">
             <TextArea
               rows={4}
-              placeholder="请输入详细的测试步骤，每个步骤一行"
+              placeholder="请输入详细的测试步骤，使用【1】、【2】等编号格式，每个步骤一行"
             />
           </Form.Item>
 
           <Form.Item name="expected_result" label="预期结果">
             <TextArea
               rows={3}
-              placeholder="请输入预期的测试结果"
+              placeholder="请输入预期的测试结果，使用【1】、【2】等编号格式，与步骤描述对应"
             />
           </Form.Item>
 
@@ -629,7 +691,7 @@ const TestCasesPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="case_level"
-                label="优先级"
+                label="用例等级"
                 initialValue="中"
               >
                 <Select>
@@ -642,7 +704,7 @@ const TestCasesPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="case_type"
-                label="测试类型"
+                label="用例类型"
                 initialValue="功能测试"
               >
                 <Select>
@@ -696,7 +758,7 @@ const TestCasesPage: React.FC = () => {
                 <p>{viewingCase.title}</p>
               </Col>
               <Col span={12}>
-                <Text strong>测试组</Text>
+                <Text strong>所属分组</Text>
                 <p>{viewingCase.group_name || '-'}</p>
               </Col>
             </Row>
@@ -706,11 +768,11 @@ const TestCasesPage: React.FC = () => {
                 <p>{viewingCase.maintainer || '-'}</p>
               </Col>
               <Col span={8}>
-                <Text strong>优先级</Text>
+                <Text strong>用例等级</Text>
                 <p><Tag color={getLevelColor(viewingCase.case_level)}>{viewingCase.case_level}</Tag></p>
               </Col>
               <Col span={8}>
-                <Text strong>测试类型</Text>
+                <Text strong>用例类型</Text>
                 <p><Tag color={getTypeColor(viewingCase.case_type)}>{viewingCase.case_type}</Tag></p>
               </Col>
             </Row>
@@ -719,7 +781,7 @@ const TestCasesPage: React.FC = () => {
               <pre className="whitespace-pre-wrap bg-gray-50 p-3 rounded">{viewingCase.precondition || '-'}</pre>
             </div>
             <div>
-              <Text strong>测试步骤</Text>
+              <Text strong>步骤描述</Text>
               <pre className="whitespace-pre-wrap bg-gray-50 p-3 rounded">{viewingCase.step_description || '-'}</pre>
             </div>
             <div>
