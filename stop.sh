@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# PRD测试用例生成系统 - 停止脚本
+# AstraTest-PRD2TC - 停止脚本
 
 set -e
 
-echo "=== 停止PRD测试用例生成系统 ==="
+echo "=== 停止AstraTest-PRD2TC ==="
 
 # 进入项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

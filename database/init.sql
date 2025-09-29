@@ -1,11 +1,11 @@
--- PRD测试用例生成系统数据库初始化脚本
+-- AstraTest-PRD2TC数据库初始化脚本
 
 -- 创建数据库
-CREATE DATABASE IF NOT EXISTS prd_test_system 
+CREATE DATABASE IF NOT EXISTS astratest_prd2tc 
 CHARACTER SET utf8mb4 
 COLLATE utf8mb4_unicode_ci;
 
-USE prd_test_system;
+USE astratest_prd2tc;
 
 -- 文件上传表
 CREATE TABLE file_uploads (

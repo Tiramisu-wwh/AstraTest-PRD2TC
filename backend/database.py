@@ -6,7 +6,7 @@ import os
 # 数据库配置
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "mysql+mysqlconnector://root:wuwenhui@localhost:3306/prd_test_system"
+    "mysql+mysqlconnector://root:wuwenhui@localhost:3306/astratest_prd2tc"
 )
 
 engine = create_engine(

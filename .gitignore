@@ -170,10 +170,10 @@ public
 .tern-port
 
 # Frontend specific
-frontend/prd-test-frontend/dist/
-frontend/prd-test-frontend/node_modules/
-frontend/prd-test-frontend/.env.local
-frontend/prd-test-frontend/build/
+frontend/astratest-prd2tc/dist/
+frontend/astratest-prd2tc/node_modules/
+frontend/astratest-prd2tc/.env.local
+frontend/astratest-prd2tc/build/
 
 # Build outputs
 dist/
@@ -229,13 +229,13 @@ __pycache__/
 *.db
 mysql/data/
 
-# Upload files
+# Upload files - 但保留requirements.txt和文档文件
 uploads/
 *.pdf
 *.docx
 *.doc
-*.txt
-*.md
+!requirements.txt  # 例外：保留requirements.txt
+# *.md  # 注释掉：不应该忽略Markdown文档文件
 
 # Log files and PIDs
 logs/
@@ -246,7 +246,7 @@ logs/
 .env
 .env.*
 
-# Package lock files (choose one)
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
+# Package lock files - 应该纳入版本控制以确保依赖一致性
+# package-lock.json  # npm
+# yarn.lock          # yarn
+pnpm-lock.yaml       # pnpm (推荐纳入版本控制)

@@ -39,7 +39,7 @@ logging.basicConfig(
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="PRD测试用例生成系统",
+    title="AstraTest-PRD2TC",
     description="基于AI的PRD文档测试用例自动生成系统",
     version="1.0.0"
 )
@@ -72,7 +72,7 @@ os.makedirs("uploads", exist_ok=True)
 
 @app.get("/")
 async def root():
-    return {"message": "PRD测试用例生成系统 API"}
+    return {"message": "AstraTest-PRD2TC API"}
 
 @app.post("/api/upload", response_model=FileUploadResponse)
 async def upload_file(

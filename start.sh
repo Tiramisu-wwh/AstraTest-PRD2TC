@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# PRD测试用例生成系统 - 启动脚本
+# AstraTest-PRD2TC - 启动脚本
 
 set -e
 
-echo "=== PRD测试用例生成系统启动脚本 ==="
+echo "=== AstraTest-PRD2TC 启动脚本 ==="
 
 # 检查Python是否安装
 if ! command -v python3 &> /dev/null; then
@@ -73,7 +73,7 @@ else
 fi
 
 # 切换到前端目录
-cd ../frontend/prd-test-frontend
+cd ../frontend/astratest-prd2tc
 
 # 检查pnpm是否安装
 if ! command -v pnpm &> /dev/null; then
